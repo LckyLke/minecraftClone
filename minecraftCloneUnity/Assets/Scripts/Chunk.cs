@@ -15,13 +15,14 @@ public class Chunk
 
     List<int> Triangles = new List<int>();
     List<Vector3> Vertices = new List<Vector3>();
+    List<Vector2> uvs = new List<Vector2>();
+    World world;
 
-
-    bool[,,] voxelMap = new bool[VoxelData.ChunkWidth, VoxelData.ChunkHeight, VoxelData.ChunkWidth];
+    byte[,,] voxelMap = new byte[VoxelData.ChunkWidth, VoxelData.ChunkHeight, VoxelData.ChunkWidth];
     
     public Chunk(World _world)
     {
-        World world = _world;
+        world = _world;
 
         CreateChunkAndItsMesh(world);
         PopulateVoxelMap();
@@ -39,7 +40,7 @@ public class Chunk
             {
                 for (int z = 0; z < VoxelData.ChunkWidth; z++)
                 {
-                    voxelMap[x, y, z] = true;
+                    voxelMap[x, y, z] = 2;
                 }
             }
         }
@@ -52,12 +53,12 @@ public class Chunk
         int z = Mathf.FloorToInt(pos.z);
 
         if (x < 0 || x > VoxelData.ChunkWidth - 1 || y < 0 || y > VoxelData.ChunkHeight - 1 || z < 0 || z > VoxelData.ChunkWidth - 1)//Überprüft ob es sich um einen Block außerhalb der Begrenzung handelt(nicht existent:0)
-            //Folglich muss dieser nicht solid sein da er nicht existiert
+                                                                                                                                     //Folglich ist dieser nicht solid da er nicht existiert
         {
             return false;
         }
 
-        return voxelMap[x,y,z];
+        return world.blockTypes[voxelMap[x,y,z]].isSolid;
     }
 
     void CreateChunkAndItsMesh(World world)
@@ -66,6 +67,7 @@ public class Chunk
         chunkObject.transform.SetParent(world.transform);
         meshRenderer = chunkObject.AddComponent<MeshRenderer>();
         meshFilter = chunkObject.AddComponent<MeshFilter>();
+        meshRenderer.material = world.material;
     }
 
     void GenerateNewVoxel(Vector3 pos)
@@ -76,10 +78,13 @@ public class Chunk
         {
             if (!CheckVoxel(pos + VoxelData.faceChecks[p])) //Es wird überprüft ob nachbar Block solid ist und wenn nein wird die entsprechende Seite generiert!
             {
+                byte blockID = voxelMap[(int)pos.x, (int)pos.y, (int)pos.z];
+
                 Vertices.Add(pos + VoxelData.VerticesArr[VoxelData.TriangelsArr[p][0]]);
                 Vertices.Add(pos + VoxelData.VerticesArr[VoxelData.TriangelsArr[p][1]]);
                 Vertices.Add(pos + VoxelData.VerticesArr[VoxelData.TriangelsArr[p][2]]);
                 Vertices.Add(pos + VoxelData.VerticesArr[VoxelData.TriangelsArr[p][3]]);
+                AddTexture(world.blockTypes[blockID].GetTextureId(p));
                 Triangles.AddRange(new int[6] { vertexIndex, vertexIndex + 1, vertexIndex + 2, vertexIndex + 2, vertexIndex + 1, vertexIndex + 3 });
                 vertexIndex += 4;
 
@@ -97,8 +102,7 @@ public class Chunk
             {
                 for (int z = 0; z < VoxelData.ChunkWidth; z++)
                 {
-                    if (voxelMap[x,y,z]) 
-                        GenerateNewVoxel(worldPos + new Vector3(x, y, z));
+                     GenerateNewVoxel(worldPos + new Vector3(x, y, z));
                 }
             }
         } 
@@ -109,7 +113,23 @@ public class Chunk
         mesh = new Mesh();
         mesh.vertices = Vertices.ToArray();
         mesh.triangles = Triangles.ToArray();
+        mesh.uv = uvs.ToArray();
         mesh.RecalculateNormals();
         meshFilter.mesh = mesh;
+    }
+
+    void AddTexture (int textureID)
+    {
+        float y = textureID / VoxelData.TextureAtlasSizeInBlocks;
+        float x = textureID - (y * VoxelData.TextureAtlasSizeInBlocks);
+
+        x *= VoxelData.NormalizedBlockTextureSize;
+        y *= VoxelData.NormalizedBlockTextureSize;
+        y = 1f - y - VoxelData.NormalizedBlockTextureSize;
+
+        uvs.Add(new Vector2(x, y));
+        uvs.Add(new Vector2(x, y + VoxelData.NormalizedBlockTextureSize));
+        uvs.Add(new Vector2(x + VoxelData.NormalizedBlockTextureSize, y));
+        uvs.Add(new Vector2(x + VoxelData.NormalizedBlockTextureSize, y + VoxelData.NormalizedBlockTextureSize));
     }
 }
